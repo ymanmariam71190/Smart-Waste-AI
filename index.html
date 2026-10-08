@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Smart Waste AI</title>
+
+
+    <!-- TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+
+    <!-- Teachable Machine -->
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+
+        body {
+
+            font-family: Arial, sans-serif;
+
+            background: linear-gradient(
+                135deg,
+                #e8f5e9,
+                #f1f8e9
+            );
+
+            min-height: 100vh;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            padding: 30px;
+
+        }
+
+
+        .container {
+
+            background: white;
+
+            width: 100%;
+
+            max-width: 700px;
+
+            padding: 35px;
+
+            border-radius: 25px;
+
+            text-align: center;
+
+            box-shadow:
+                0 10px 30px rgba(0,0,0,0.15);
+
+        }
+
+
+        h1 {
+
+            color: #2e7d32;
+
+            margin-bottom: 10px;
+
+            font-size: 35px;
+
+        }
+
+
+        .description {
+
+            color: #666;
+
+            margin-bottom: 25px;
+
+            font-size: 17px;
+
+        }
+
+
+        .buttons {
+
+            display: flex;
+
+            justify-content: center;
+
+            gap: 15px;
+
+            flex-wrap: wrap;
+
+            margin-bottom: 25px;
+
+        }
+
+
+        button {
+
+            background: #2e7d32;
+
+            color: white;
+
+            border: none;
+
+            padding: 14px 25px;
+
+            border-radius: 10px;
+
+            font-size: 16px;
+
+            cursor: pointer;
+
+        }
+
+
+        button:hover {
+
+            background: #1b5e20;
+
+        }
+
+
+        #fileInput {
+
+            display: none;
+
+        }
+
+
+        #image-container {
+
+            margin: 20px 0;
+
+            min-height: 50px;
+
+        }
+
+
+        #image-container img {
+
+            width: 400px;
+
+            max-width: 100%;
+
+            border-radius: 15px;
+
+            border: 4px solid #2e7d32;
+
+        }
+
+
+        .result {
+
+            background: #f5f5f5;
+
+            padding: 25px;
+
+            border-radius: 15px;
+
+            margin-top: 20px;
+
+        }
+
+
+        .result h2 {
+
+            color: #333;
+
+            margin-bottom: 15px;
+
+        }
+
+
+        #prediction {
+
+            font-size: 30px;
+
+            font-weight: bold;
+
+            color: #2e7d32;
+
+            margin: 10px 0;
+
+        }
+
+
+        #confidence {
+
+            font-size: 18px;
+
+            color: #555;
+
+        }
+
+
+        #recommendation {
+
+            margin-top: 15px;
+
+            font-size: 18px;
+
+            color: #444;
+
+            line-height: 1.5;
+
+        }
+
+
+        #status {
+
+            margin-top: 20px;
+
+            color: #777;
+
+            font-size: 15px;
+
+        }
+
+
+        .loading {
+
+            color: #f57c00 !important;
+
+        }
+
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+
+    <h1>♻️ Smart Waste AI</h1>
+
+
+    <p class="description">
+
+        Take or upload a photo and let AI identify the waste type.
+
+    </p>
+
+
+
+    <!-- Buttons -->
+
+    <div class="buttons">
+
+
+        <!-- Take / Choose Photo -->
+
+        <button
+            type="button"
+            onclick="document.getElementById('fileInput').click()"
+        >
+
+            📸 Take / Choose Photo
+
+        </button>
+
+
+
+        <!-- Analyze -->
+
+        <button
+            type="button"
+            onclick="analyzeImage()"
+        >
+
+            🤖 Analyze Image
+
+        </button>
+
+
+    </div>
+
+
+
+    <!-- File Input -->
+
+    <input
+        type="file"
+        id="fileInput"
+        accept="image/*"
+        capture="environment"
+        onchange="showImage(event)"
+    >
+
+
+
+    <!-- Selected Image -->
+
+    <div id="image-container">
+
+        <p style="color:#999;">
+            Your image will appear here
+        </p>
+
+    </div>
+
+
+
+    <!-- AI Result -->
+
+    <div class="result">
+
+
+        <h2>AI Result</h2>
+
+
+        <div id="prediction">
+
+            No image selected
+
+        </div>
+
+
+        <div id="confidence">
+
+            Confidence: --
+
+        </div>
+
+
+        <div id="recommendation">
+
+            Choose a waste image to start.
+
+        </div>
+
+
+    </div>
+
+
+
+    <!-- Status -->
+
+    <div id="status" class="loading">
+
+        Loading AI model...
+
+    </div>
+
+
+</div>
+
+
+
+<script>
+
+
+    // ==================================================
+    // 1. YOUR TEACHABLE MACHINE MODEL LINK
+    // ==================================================
+
+    const URL =
+     "https://teachablemachine.withgoogle.com/models/hIjiH3IqQ/";
+
+
+
+    // ==================================================
+    // 2. VARIABLES
+    // ==================================================
+
+    let model = null;
+
+    let selectedImage = null;
+
+
+
+    // ==================================================
+    // 3. LOAD AI MODEL
+    // ==================================================
+
+    async function loadModel() {
+
+
+        try {
+
+
+            document.getElementById("status").innerText =
+                "🤖 Loading AI model...";
+
+
+            const modelURL =
+                URL + "model.json";
+
+
+            const metadataURL =
+                URL + "metadata.json";
+
+
+            console.log("Model URL:", modelURL);
+
+            console.log("Metadata URL:", metadataURL);
+
+
+            // Load model
+
+            model = await tmImage.load(
+                modelURL,
+                metadataURL
+            );
+
+
+            console.log("AI Model Loaded Successfully");
+
+
+            document.getElementById("status").innerText =
+                "✅ AI model is ready! Choose an image.";
+
+
+            document.getElementById("status").classList.remove(
+                "loading"
+            );
+
+
+        }
+
+
+        catch (error) {
+
+
+            console.error(
+                "MODEL ERROR:",
+                error
+            );
+
+
+            document.getElementById("status").innerText =
+                "❌ Failed to load AI model.";
+
+
+            document.getElementById("status").classList.add(
+                "loading"
+            );
+
+
+            document.getElementById("prediction").innerText =
+                "Model Error";
+
+
+            document.getElementById("recommendation").innerText =
+                "Check your Teachable Machine model link.";
+
+
+        }
+
+    }
+
+
+
+    // ==================================================
+    // 4. SHOW SELECTED IMAGE
+    // ==================================================
+
+    function showImage(event) {
+
+
+        const file =
+            event.target.files[0];
+
+
+        if (!file) {
+
+            return;
+
+        }
+
+
+        // Make sure it is an image
+
+        if (!file.type.startsWith("image/")) {
+
+
+            alert(
+                "Please choose an image file."
+            );
+
+
+            return;
+
+        }
+
+
+        const reader =
+            new FileReader();
+
+
+
+        reader.onload = function(e) {
+
+
+            // Create image
+
+            const image =
+                document.createElement("img");
+
+
+            image.src =
+                e.target.result;
+
+
+            image.id =
+                "selected-image";
+
+
+            image.onload = function() {
+
+
+                selectedImage =
+                    image;
+
+
+                console.log(
+                    "Image loaded successfully"
+                );
+
+
+            };
+
+
+
+            // Put image on page
+
+            const container =
+                document.getElementById(
+                    "image-container"
+                );
+
+
+            container.innerHTML = "";
+
+
+            container.appendChild(image);
+
+
+
+            // Reset results
+
+            document.getElementById(
+                "prediction"
+            ).innerText =
+                "Ready to analyze";
+
+
+            document.getElementById(
+                "confidence"
+            ).innerText =
+                "Confidence: --";
+
+
+            document.getElementById(
+                "recommendation"
+            ).innerText =
+                "Click Analyze Image.";
+
+
+            document.getElementById(
+                "status"
+            ).innerText =
+                "📸 Image selected. Ready for AI analysis.";
+
+
+        };
+
+
+        reader.readAsDataURL(file);
+
+
+    }
+
+
+
+    // ==================================================
+    // 5. ANALYZE IMAGE
+    // ==================================================
+
+    async function analyzeImage() {
+
+
+        // Check image
+
+        if (!selectedImage) {
+
+
+            alert(
+                "📸 Please take or choose a photo first."
+            );
+
+
+            return;
+
+        }
+
+
+
+        // Check model
+
+        if (!model) {
+
+
+            alert(
+                "🤖 AI model is not ready yet. Please wait."
+            );
+
+
+            return;
+
+        }
+
+
+
+        document.getElementById(
+            "status"
+        ).innerText =
+            "🤖 AI is analyzing your image...";
+
+
+
+        try {
+
+
+            // Get predictions
+
+            const predictions =
+                await model.predict(
+                    selectedImage
+                );
+
+
+            console.log(
+                "Predictions:",
+                predictions
+            );
+
+
+
+            // Start with first class
+
+            let bestPrediction =
+                predictions[0];
+
+
+
+            // Find highest probability
+
+            for (
+                let i = 1;
+                i < predictions.length;
+                i++
+            ) {
+
+
+                if (
+                    predictions[i].probability >
+                    bestPrediction.probability
+                ) {
+
+
+                    bestPrediction =
+                        predictions[i];
+
+
+                }
+
+            }
+
+
+
+            // Class name
+
+            const className =
+                bestPrediction.className;
+
+
+
+            // Confidence
+
+            const confidence =
+                bestPrediction.probability * 100;
+
+
+
+            // Show class
+
+            document.getElementById(
+                "prediction"
+            ).innerText =
+                className;
+
+
+
+            // Show confidence
+
+            document.getElementById(
+                "confidence"
+            ).innerText =
+                "Confidence: " +
+                confidence.toFixed(2) +
+                "%";
+
+
+
+            // Show recommendation
+
+            showRecommendation(
+                className
+            );
+
+
+
+            document.getElementById(
+                "status"
+            ).innerText =
+                "✅ Analysis completed successfully!";
+
+
+        }
+
+
+        catch (error) {
+
+
+            console.error(
+                "PREDICTION ERROR:",
+                error
+            );
+
+
+            document.getElementById(
+                "status"
+            ).innerText =
+                "❌ Error while analyzing image.";
+
+
+        }
+
+    }
+
+
+
+    // ==================================================
+    // 6. RECOMMENDATION
+    // ==================================================
+
+    function showRecommendation(
+        className
+    ) {
+
+
+        const recommendation =
+            document.getElementById(
+                "recommendation"
+            );
+
+
+        const waste =
+            className.toLowerCase();
+
+
+
+        // Plastic
+
+        if (
+            waste.includes("plastic")
+        ) {
+
+
+            recommendation.innerText =
+                "🟡 Plastic waste detected. " +
+                "Put it in the Plastic Recycling Bin.";
+
+
+        }
+
+
+
+        // Paper
+
+        else if (
+            waste.includes("paper")
+        ) {
+
+
+            recommendation.innerText =
+                "🔵 Paper waste detected. " +
+                "Put it in the Paper Recycling Bin.";
+
+
+        }
+
+
+
+        // Metal
+
+        else if (
+            waste.includes("metal")
+        ) {
+
+
+            recommendation.innerText =
+                "⚙️ Metal waste detected. " +
+                "Put it in the Metal Recycling Bin.";
+
+
+        }
+
+
+
+        // Glass
+
+        else if (
+            waste.includes("glass")
+        ) {
+
+
+            recommendation.innerText =
+                "🟢 Glass waste detected. " +
+                "Put it in the Glass Recycling Bin.";
+
+
+        }
+
+
+
+        // Other
+
+        else {
+
+
+            recommendation.innerText =
+                "♻️ Waste detected. " +
+                "Please put it in the appropriate recycling bin.";
+
+
+        }
+
+    }
+
+
+
+    // ==================================================
+    // 7. START
+    // ==================================================
+
+    loadModel();
+
+
+</script>
+
+
+</body>
+
+</html>
